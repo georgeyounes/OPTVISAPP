@@ -1,0 +1,10 @@
+astroplan
+astropy
+numpy
+matplotlib
+scipy
+seaborn
+xlsxwriter
+joblib
+selenium
+webdriver_manager

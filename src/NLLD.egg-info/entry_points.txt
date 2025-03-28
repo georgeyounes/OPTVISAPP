@@ -1,0 +1,6 @@
+[console_scripts]
+ags3withbrightearth = nlld.ags_iss:main
+buildtargetcatalog = nlld.make_observing_catalogs:main
+createvisibilities = nlld.createvisibilities:main
+orbitinfo_targetcat = nlld.orbitinfo_targetcat:main
+targetvisibilities = nlld.targetvisibilitydetails:main

@@ -1,0 +1,6 @@
+[console_scripts]
+ags3withbrightearth = optvisapp.ags_iss:main
+buildtargetcatalog = optvisapp.make_observing_catalogs:main
+createvisibilities = optvisapp.createvisibilities:main
+orbitinfo_targetcat = optvisapp.orbitinfo_targetcat:main
+targetvisibilities = optvisapp.targetvisibilitydetails:main

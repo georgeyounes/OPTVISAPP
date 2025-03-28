@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "OPTVISAPP"
+version = "0.1.0"
+dependencies = [
+  "astroplan",
+  "astropy",
+  "numpy",
+  "matplotlib",
+  "scipy",
+  "seaborn",
+  "xlsxwriter",
+  "joblib",
+  "selenium",
+  "webdriver_manager"
+]
+requires-python = ">=3.8"
+authors = [
+  {name = "George Younes", email = "george.a.younes@nasa.gov"},
+]
+maintainers = [
+  {name = "George Younes", email = "george.a.younes@nasa.gov"}
+]
+description = "Codes that aided in diagnosing the nicer light-leak and informing some mitigation"
+readme = "README.md"
+license = {file = "LICENSE.txt"}
+keywords = ["NICER", "High Energy Astrophysics", "X-ray", "Astronomy", "Astrophysics", "Light-leak", "Mitigation"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Programming Language :: Python"
+]
+
+[project.scripts]
+ags3withbrightearth = "optvisapp.ags_iss:main"
+orbitinfo_targetcat = "optvisapp.orbitinfo_targetcat:main"
+targetvisibilities = "optvisapp.targetvisibilitydetails:main"
+createvisibilities = "optvisapp.createvisibilities:main"
+buildtargetcatalog = "optvisapp.make_observing_catalogs:main"
