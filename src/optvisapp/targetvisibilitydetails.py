@@ -111,6 +111,8 @@ def visibilitytargetcat(catalog_name, ags3, start_time, end_time, freq_bound=60,
 
         # Check if target is in target catalog
         if targetcat_df_srcflt.empty:
+            logger.error('Target {} is not in target catalog, yet appears in visibility files - '
+                            'ingest it into target catalog'.format(target))
             raise Exception('Target {} is not in target catalog, yet appears in visibility files - '
                             'ingest it into target catalog'.format(target))
 

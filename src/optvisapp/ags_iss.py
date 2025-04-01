@@ -301,10 +301,8 @@ def main():
     iss_oem_ephem = read_iss_oem_ephem(args.issorbitfile)
     df_nicer_vis = read_ags3_vis_file(args.ags3_vis_file)
 
-    nicer_vis_windows_orbitday_flt_be_df = ags_update_persource(iss_oem_ephem, df_nicer_vis, args.srcname, args.srcRA,
+    ags_update_persource(iss_oem_ephem, df_nicer_vis, args.srcname, args.srcRA,
                                                                 args.srcDEC, args.daysafter)
-
-    print(nicer_vis_windows_orbitday_flt_be_df)
 
     return
 
