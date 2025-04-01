@@ -21,6 +21,7 @@ from optvisapp import ags_iss, observing_geometry
 from optvisapp.optvisapp_logging import get_logger
 
 import time
+import os
 
 import sys
 
@@ -31,16 +32,14 @@ sys.dont_write_bytecode = True
 logger = get_logger(__name__)
 
 
-def visibilitytargetcat(catalog_name, ags3, iss_orbit_file, start_time, end_time, freq_bound=60,
-                        freq_brearth=240, sa_ll=70, sa_ul=180, outputFile='visibilityplot', saveresults=False):
+def visibilitytargetcat(catalog_name, ags3, start_time, end_time, freq_bound=60, freq_brearth=240, sa_ll=70,
+                        sa_ul=180, outputFile='visibilities', saveresults=True, saveplot=False):
     """
     Read-in ISS OEM ephemeris as a dataframe
     :param catalog_name: NICER target catalog file
     :type catalog_name: str
     :param ags3: NICER visibility file
     :type ags3: str
-    :param iss_orbit_file: iss OEM ephem orbit file
-    :type iss_orbit_file: str
     :param start_time: Start time in the same format as visibility windows in AGS3 ('%Y-%jT%H:%M:%S', e.g., 2025-075T00:00:00)
     :type start_time: str
     :param end_time: End time in the same format as visibility windows in AGS3 ('%Y-%jT%H:%M:%S', e.g., 2025-076T00:00:00)
@@ -53,17 +52,25 @@ def visibilitytargetcat(catalog_name, ags3, iss_orbit_file, start_time, end_time
     :type sa_ul: float
     :param freq_brearth: frequency of timestamps for bright earth calculation in seconds
     :type freq_brearth: int
-    :param outputFile: name of output file (default = "visibilityplot")
+    :param outputFile: name of output file (default = "visibilities")
     :type outputFile: str
     :param saveresults: Boolean to save dataframes to csv files (default = "False")
     :type saveresults: bool
+    :param saveplot: Boolean to save results to a static html plot (only for debugging, default = False)
+    :type saveplot: bool
     """
 
     # Reading target catalog
     targetcat_df, targetcat_df_nosourceduplicates, _ = ags_iss.read_target_catalog(catalog_name)
 
     # Reading ISS OEM file
-    issorbitdata = ags_iss.read_iss_oem_ephem(iss_orbit_file)
+    # Check if iss_orbit_file="ISS.OEM_J2K_EPH.txt" is in current directory, if not download it
+    iss_orbit_file = "ISS.OEM_J2K_EPH.txt"
+    if os.path.exists(iss_orbit_file):
+        issorbitdata = ags_iss.read_iss_oem_ephem(iss_orbit_file)
+    else:
+        iss_orbit_file = ags_iss.downloadissoemfile()
+        issorbitdata = ags_iss.read_iss_oem_ephem(iss_orbit_file)
 
     # Reading AGS catalog
     # Drop duplicates of exact target_name and visibility windows, keep first
@@ -161,13 +168,16 @@ def visibilitytargetcat(catalog_name, ags3, iss_orbit_file, start_time, end_time
         target_brightearth_all_df.to_parquet(outputFile + '_brightearth.parquet')
         target_od_startend_times_all.to_parquet(outputFile + '_od_startend_times.parquet')
         od_windows.to_parquet(outputFile + '_odbounds.parquet')
+    else:
+        logger.info('Dataframe results not saved to .parquet output files. If saveresults is set to True, ensure '
+                    'outputFile is not None.')
 
     # Create a plotly html file - interactive plot
-    if outputFile is not None:
+    if saveplot and outputFile is not None:
         visibilityplot_plotly(df_nicer_vis_timeflt, target_brightearth_all_df, target_od_startend_times_all,
                               od_windows, start_timeofint, end_timeofint, freq_bound=60, outputFile=outputFile)
     else:
-        logger.info('No visibility plot created.')
+        logger.info('No visibility plot created. If saveplot is set to True, ensure outputFile is not None.')
 
     return df_nicer_vis_timeflt, target_brightearth_all_df, target_od_startend_times_all, od_windows
 
@@ -372,7 +382,7 @@ def bright_earth_targetvis(issorbitdata, df_nicer_vis, od_windows, srcname, srcR
 
 
 def visibilityplot_plotly(nicer_vis, target_brightearth, alltargets_od_startend_times, od_windows, start_time,
-                          end_time, freq_bound=60, outputFile='visibilityplot'):
+                          end_time, freq_bound=60, outputFile='visibilities'):
     """
     :param nicer_vis: NICER target visibilities
     :type nicer_vis: pandas.DataFrame
@@ -388,10 +398,11 @@ def visibilityplot_plotly(nicer_vis, target_brightearth, alltargets_od_startend_
     :type od_windows: pandas.DataFrame
     :param freq_bound: frequency of timestamps between start_time and end_time in seconds
     :type freq_bound: int
-    :param outputFile: name of output file (default = "visibilityplot")
-    :type outputFile: str
+    :param outputFile: name of output file (default = "visibilities")
+    :type outputFile: str or None
     """
     # Create combined y-axis labels in the format (target_ID, target_name, sunangle_start, sunangle_trend)
+    nicer_vis = nicer_vis.copy()
     nicer_vis["label"] = nicer_vis.apply(
         lambda row: f"({row['target_id']}, {row['target_name']}, {row['sunangle_start']:.2f}, {row['sunangle_trend']})",
         axis=1
@@ -551,7 +562,6 @@ def main():
         description="Provide orbit status and Sun angle information to NICER target catalog")
     parser.add_argument("catalog_name", help="A NICER source catalog name ISS", type=str)
     parser.add_argument("ags3", help="A NICER AGS3 visibility file", type=str)
-    parser.add_argument("iss_orbit_file", help="A ISS orbit file (OEM format)", type=str)
     parser.add_argument("start_time", help="Start of visibilities (Y-jTH:M:S, e.g., "
                                            "2025-075T00:00:00)", type=str)
     parser.add_argument("end_time", help="End of visibilities (Y-jTH:M:S, e.g., "
@@ -564,11 +574,14 @@ def main():
                                                "(default=70 in degrees)", type=int, default=70)
     parser.add_argument("-su", "--sa_ul", help="Sun angle upper range for target filtering "
                                                "(default=180 in degrees)", type=int, default=180)
-    parser.add_argument("-of", "--outputFile", help="Name of output visibility plot "
-                                                    "(default = visibilityplot(.html))", type=str,
-                        default='visibilityplot')
-    parser.add_argument("-sr", "--saveresults", help="Boolean to save dataframes to csv files "
-                                                     "(default = False)", type=bool, default=False,
+    parser.add_argument("-of", "--outputFile", help="Name of output visibility plot/files "
+                                                    "(default = visibilities(.html))", type=str,
+                        default='visibilities')
+    parser.add_argument("-sr", "--saveresults", help="Boolean to save dataframes to parquet files "
+                                                     "(default = True)", type=bool, default=True,
+                        action=argparse.BooleanOptionalAction)
+    parser.add_argument("-sp", "--saveplot", help="Boolean to save results to a static html plot (only "
+                                                  "for debugging, default = False)", type=bool, default=False,
                         action=argparse.BooleanOptionalAction)
 
     args = parser.parse_args()
@@ -583,8 +596,8 @@ def main():
         raise ValueError("Invalid timestamp detected: 'start_time' and 'end_time' are too far apart, limit to "
                          "14400 seconds (4 hours).")
 
-    visibilitytargetcat(args.catalog_name, args.ags3, args.iss_orbit_file, args.start_time, args.end_time,
-                        args.freq_bound, args.freq_brearth, args.sa_ll, args.sa_ul, args.outputFile, args.saveresults)
+    visibilitytargetcat(args.catalog_name, args.ags3, args.start_time, args.end_time, args.freq_bound,
+                        args.freq_brearth, args.sa_ll, args.sa_ul, args.outputFile, args.saveresults, args.saveplot)
 
     execution_end_time = time.time()
     print(' Script ran to completion in {} minutes.'.format((execution_end_time - execution_start_time) / 60))

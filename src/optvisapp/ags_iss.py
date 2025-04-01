@@ -10,6 +10,10 @@ from astropy.time import Time
 
 import sys
 import argparse
+import os
+
+import urllib.request
+import shutil
 
 from optvisapp import observing_geometry
 from optvisapp.optvisapp_logging import get_logger
@@ -46,6 +50,24 @@ def read_iss_oem_ephem(issorbitfile):
     iss_oem_ephem = pd.read_csv(issorbitfile, sep=r"\s+", header=None, skiprows=index + 1,
                                 names=["TIME_UTC", "ISS_X", "ISS_Y", "ISS_Z", "ISS_Vx", "ISS_Vy", "ISS_Vz"])
     iss_oem_ephem['TIME_UTC'] = pd.to_datetime(iss_oem_ephem['TIME_UTC'], format='ISO8601', utc=True)
+
+    return iss_oem_ephem
+
+
+def downloadissoemfile(outputdir='./'):
+    """
+    Download ISS OEM ephemeris from web
+    :param outputdir: directory where to store the downloaded file
+    :type outputdir: str
+    :return iss_oem_ephem: ISS OEM ephemeris
+    :rtype: str
+    """
+    issoemfile = 'https://nasa-public-data.s3.amazonaws.com/iss-coords/current/ISS_OEM/ISS.OEM_J2K_EPH.txt'
+    iss_oem_ephem = "ISS.OEM_J2K_EPH.txt"
+    urllib.request.urlretrieve(issoemfile, iss_oem_ephem)
+    if not os.path.exists(outputdir):
+        os.makedirs(outputdir)
+    shutil.move(iss_oem_ephem, outputdir)
 
     return iss_oem_ephem
 
