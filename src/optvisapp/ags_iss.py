@@ -12,6 +12,9 @@ import sys
 import argparse
 import os
 
+import re
+import docx
+
 import urllib.request
 import shutil
 
@@ -67,7 +70,7 @@ def downloadissoemfile(outputdir='./'):
     urllib.request.urlretrieve(issoemfile, iss_oem_ephem)
     if not os.path.exists(outputdir):
         os.makedirs(outputdir)
-    shutil.move(iss_oem_ephem, outputdir)
+        shutil.move(iss_oem_ephem, outputdir)
 
     return iss_oem_ephem
 
@@ -84,12 +87,13 @@ def read_target_catalog(targetcatalog):
     column_names = pd.read_csv(targetcatalog, skiprows=2, nrows=1, header=None).values[0]
 
     # Read the remaining data, skipping the first three rows
-    targetcat_df = pd.read_csv(targetcatalog, skiprows=3, header=None, names=column_names, index_col=0)
+    targetcat_df = pd.read_csv(targetcatalog, skiprows=3, header=None, names=column_names, index_col=False)
+
     # Remove leading/trailing whitespaces from target name
     targetcat_df['Source'] = targetcat_df['Source'].str.strip()
 
-    # Remove duplicates from target catalog dataframe according to 'Source' column (source name)
-    targetcat_df_nosourceduplicates = targetcat_df.drop_duplicates(subset='Source', keep='first')
+    # Remove duplicates from target catalog dataframe according to 'ID' column (Target ID)
+    targetcat_df_nosourceduplicates = targetcat_df.drop_duplicates(subset='ID', keep='first')
 
     # Header of dataframe
     targetcat_header = pd.read_csv(targetcatalog, nrows=2, header=None, names=column_names, index_col=0)
@@ -126,27 +130,26 @@ def read_ags3_vis_file(ags3_vis_file):
     df_nicer_vis['vis_start'] = pd.to_datetime(df_nicer_vis['vis_start'], format='%Y-%jT%H:%M:%S', utc=True)
     df_nicer_vis['vis_end'] = pd.to_datetime(df_nicer_vis['vis_end'], format='%Y-%jT%H:%M:%S', utc=True)
 
-    # Remove leading/trailing whitespaces from target name, just in case
+    # Remove leading/trailing whitespaces from target name
     df_nicer_vis['target_name'] = df_nicer_vis['target_name'].str.strip()
 
-    # Drop duplicates of exact target_name and start or end of visibility windows, keep first
-    # warning: these targets have different target_IDs, only first ID kept
-    mask = (df_nicer_vis.duplicated(subset=['target_name', 'vis_start']) |
-            df_nicer_vis.duplicated(subset=['target_name', 'vis_end']))
+    # Drop duplicates of exact target_id and start or end of visibility windows, keep first
+    mask = (df_nicer_vis.duplicated(subset=['target_id', 'vis_start']) |
+            df_nicer_vis.duplicated(subset=['target_id', 'vis_end']))
     df_nicer_vis_nosrcdulpicate = df_nicer_vis[~mask]
 
     return df_nicer_vis, df_nicer_vis_nosrcdulpicate
 
 
-def ags_update_persource(iss_oem_ephem, df_nicer_vis, srcname, srcRA, srcDEC, daysafter=1):
+def ags_update_persource(iss_oem_ephem, df_nicer_vis, targetid, srcRA, srcDEC, daysafter=1):
     """
     Calculates orbitday files
     :param iss_oem_ephem: ISS OEM ephemeris
     :type iss_oem_ephem: pandas.DataFrame
     :param df_nicer_vis: NICER visibility
     :type df_nicer_vis: pandas.DataFrame
-    :param srcname: unique identifier of a target
-    :type srcname: str
+    :param targetid: unique identifier of a target
+    :type targetid: str
     :param srcRA: Right ascension in degrees J2000
     :type srcRA: float
     :param srcDEC: Declination in degrees J2000
@@ -157,8 +160,7 @@ def ags_update_persource(iss_oem_ephem, df_nicer_vis, srcname, srcRA, srcDEC, da
     :rtype: pandas.DataFrame
     """
     # Filter for source
-    nicer_vis_windows = df_nicer_vis[df_nicer_vis['target_name'].str.contains(srcname, regex=False)].reset_index(
-        drop=True)
+    nicer_vis_windows = df_nicer_vis[df_nicer_vis['target_id'] == targetid].reset_index(drop=True)
 
     # Calculate orbit information (day/night/both) for each visibility window
     nicer_vis_windows_orbit = observing_geometry.viswindow_islit(nicer_vis_windows, iss_oem_ephem)
@@ -286,6 +288,53 @@ def is_gzipped(filepath):
         return f.read(2) == b'\x1f\x8b'
 
 
+def read_planningdoc(planningdoc):
+    # Load the document
+    doc = docx.Document(planningdoc)
+
+    # List to hold processed column 2 data
+    target_id_list = []
+
+    # Loop over all tables in the document
+    for table_index, table in enumerate(doc.tables):
+        logger.info(f"Processing table {table_index + 1} in planning doc...")
+        for row in table.rows:
+            # Get text from the second cell (index 1 - traget_id)
+            col2_text = get_non_strike_text(row.cells[1])
+
+            # Skip the row if cell is empty after filtering
+            if not col2_text:
+                continue
+
+            # Process col2_text: split at " or " or "\n"
+            col2_text = re.split(r" or |\n", col2_text)
+            col2_text = list(filter(None, col2_text))
+            target_id_list.extend(col2_text)
+
+    df_planningdoc_tragetids = pd.DataFrame(target_id_list, columns=['target_id'])
+    df_planningdoc_tragetids = df_planningdoc_tragetids[~df_planningdoc_tragetids['target_id'].isin(['TargID',
+                                                                                                     'OLDI',
+                                                                                                     'Targ ID'])]
+
+    df_planningdoc_tragetids['target_id'].astype(int)
+
+    return df_planningdoc_tragetids
+
+
+def get_non_strike_text(cell):
+    """
+    Extracts text from a .docx table cell by concatenating text runs that are not struck through
+    """
+    text_parts = []
+    for para in cell.paragraphs:
+        for run in para.runs:
+            # Skip text that is struck through
+            if run.font and run.font.strike:
+                continue
+            text_parts.append(run.text)
+    return "".join(text_parts).strip()
+
+
 def main():
     parser = argparse.ArgumentParser(description="Append AGS3 with bright-earth angle for orbit-day visibility windows")
     parser.add_argument("issorbitfile", help="A ISS orbit file (OEM format)", type=str)
@@ -301,8 +350,7 @@ def main():
     iss_oem_ephem = read_iss_oem_ephem(args.issorbitfile)
     df_nicer_vis = read_ags3_vis_file(args.ags3_vis_file)
 
-    ags_update_persource(iss_oem_ephem, df_nicer_vis, args.srcname, args.srcRA,
-                                                                args.srcDEC, args.daysafter)
+    ags_update_persource(iss_oem_ephem, df_nicer_vis, args.srcname, args.srcRA, args.srcDEC, args.daysafter)
 
     return
 

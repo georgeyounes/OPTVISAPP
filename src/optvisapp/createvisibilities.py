@@ -18,7 +18,6 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
-# from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
 from optvisapp.optvisapp_logging import get_logger
 

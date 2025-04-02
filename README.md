@@ -2,8 +2,8 @@
 
 ## Description
 
-Target visiblity visualization application including the calculation of orbit day/night boudaries, target sun angles, 
-and bright earth angles. Intended for the use with the NICER telescope aboard the ISS.
+Target visiblity visualization application including the calculation of satellite orbit day/night boudaries, target 
+sun angles, and bright earth angles. Intended for the use with the NICER telescope aboard the ISS.
 
 ## Installation
 

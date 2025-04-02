@@ -46,9 +46,9 @@ def visibilitytargetcat(catalog_name, ags3, start_time, end_time, freq_bound=60,
     :type end_time: str
     :param freq_bound: frequency of timestamps between start_time and end_time in seconds
     :type freq_bound: int
-    :param sa_ll: Lower-limit on sun angle for target acceptance
+    :param sa_ll: Lower-limit on sun angle for target_id acceptance
     :type sa_ll: float
-    :param sa_ul: upper-limit on sun angle for target acceptance
+    :param sa_ul: upper-limit on sun angle for target_id acceptance
     :type sa_ul: float
     :param freq_brearth: frequency of timestamps for bright earth calculation in seconds
     :type freq_brearth: int
@@ -102,19 +102,18 @@ def visibilitytargetcat(catalog_name, ags3, start_time, end_time, freq_bound=60,
     # Initialize empty list for od start and end times per target
     target_od_startend_times_all_list = []
 
-    for target in df_nicer_vis_timeflt['target_name']:
+    for targetid in df_nicer_vis_timeflt['target_id']:
 
         # Filter target catalog
-        targetcat_df_srcflt = targetcat_df_nosourceduplicates[
-            targetcat_df_nosourceduplicates['Source'].str.lower() == target.lower()
-            ].reset_index(drop=True)
+        targetcat_df_srcflt = targetcat_df_nosourceduplicates[targetcat_df_nosourceduplicates['ID'] ==
+                                                              targetid].reset_index(drop=True)
 
         # Check if target is in target catalog
         if targetcat_df_srcflt.empty:
-            logger.error('Target {} is not in target catalog, yet appears in visibility files - '
-                            'ingest it into target catalog'.format(target))
-            raise Exception('Target {} is not in target catalog, yet appears in visibility files - '
-                            'ingest it into target catalog'.format(target))
+            logger.error('Target ID {} is not in target catalog, yet appears in visibility files - '
+                         'ingest it into target catalog'.format(targetid))
+            raise Exception('Target ID {} is not in target catalog, yet appears in visibility files - '
+                            'ingest it into target catalog'.format(targetid))
 
         # Times at which to calculate Sun angles
         time_start_end_allvis = np.array([start_timeofint.to_julian_date() - 2400000.5,
@@ -127,14 +126,14 @@ def visibilitytargetcat(catalog_name, ags3, start_time, end_time, freq_bound=60,
         # Filter out sources with undesired sun angle ranges
         # Done here to avoid expensive bright_earth angle calculation
         if (sunangles[0] < sa_ll) or (sunangles[0] > sa_ul):
-            target_outside_sunangle.append(target)
+            target_outside_sunangle.append(targetid)
             continue
 
         trend = 'Dec' if (sunangles[0] - sunangles[1]) > 0 else 'Inc'
 
         # Append results in a dictionary
         target_sunangle_all_list.append({
-            'target_name': target,  # keep original target name
+            'target_id': targetid,  # keep original target ID
             'sunangle_start': sunangles[0],
             'sunangle_end': sunangles[1],
             'sunangle_trend': trend
@@ -142,7 +141,7 @@ def visibilitytargetcat(catalog_name, ags3, start_time, end_time, freq_bound=60,
 
         # Bright_earth calculation
         targetbright_earth_df, target_od_startend_times = bright_earth_targetvis(issorbitdata, df_nicer_vis_timeflt,
-                                                                                 od_windows, target,
+                                                                                 od_windows, targetid,
                                                                                  targetcat_df_srcflt['RAJ_DEG'].loc[
                                                                                      0].item(),
                                                                                  targetcat_df_srcflt['DECJ_DEG'].loc[
@@ -153,11 +152,11 @@ def visibilitytargetcat(catalog_name, ags3, start_time, end_time, freq_bound=60,
         target_od_startend_times_all_list.append(target_od_startend_times)
 
     # Filter out the targets that landed outside the user-defined sun angle range
-    df_nicer_vis_timeflt = df_nicer_vis_timeflt[~df_nicer_vis_timeflt['target_name'].isin(target_outside_sunangle)]
+    df_nicer_vis_timeflt = df_nicer_vis_timeflt[~df_nicer_vis_timeflt['target_id'].isin(target_outside_sunangle)]
 
     # Convert the sun angle results list into a DataFrame and append to df_nicer_vis_flt dataframe
     targetsun_angle_results_df = pd.DataFrame(target_sunangle_all_list)
-    df_nicer_vis_timeflt = df_nicer_vis_timeflt.merge(targetsun_angle_results_df, on='target_name', how='left')
+    df_nicer_vis_timeflt = df_nicer_vis_timeflt.merge(targetsun_angle_results_df, on='target_id', how='left')
 
     # Convert the bright_earth angle results list into a DataFrame
     target_brightearth_all_df = pd.concat(target_brightearth_all_list, axis=0).reset_index(drop=True)
@@ -197,7 +196,7 @@ def orbittimes(start_time, end_time, freq_bound):
     :return orbit_times: Orbit times
     :rtype: pandas.DatetimeIndex
     """
-    # Define time stamps for orbit orbit
+    # Define time stamps for orbit between start and end times at frequency freq_bound in seconds
     orbit_times = pd.date_range(start=start_time, end=end_time,
                                 freq=str(freq_bound) + 's').to_series().reset_index(drop=True)
 
@@ -268,15 +267,15 @@ def filtertime_nicervis(start_time, end_time, df_nicer_vis):
     return df_nicer_vis_timefilt
 
 
-def bright_earth_targetvis(issorbitdata, df_nicer_vis, od_windows, srcname, srcRA, srcDEC, freq_brearth=240):
+def bright_earth_targetvis(issorbitdata, df_nicer_vis, od_windows, tragetid, srcRA, srcDEC, freq_brearth=240):
     """
     Calculates orbitday files
     :param issorbitdata: ISS OEM ephemeris in dataframe format
     :type issorbitdata: pandas.DataFrame
     :param df_nicer_vis: NICER visibility
     :type df_nicer_vis: pandas.DataFrame
-    :param srcname: unique identifier of a target
-    :type srcname: str
+    :param tragetid: unique identifier of a target
+    :type tragetid: str
     :param od_windows: Start and end times that define orbit day boundaries
     :type od_windows: pandas.DataFrame
     :param srcRA: Right ascension in degrees J2000
@@ -293,28 +292,45 @@ def bright_earth_targetvis(issorbitdata, df_nicer_vis, od_windows, srcname, srcR
     target_od_startend_times_list = []
 
     # Filter for source
-    df_nicer_vis_srcflt = df_nicer_vis[df_nicer_vis['target_name'] == srcname].reset_index(drop=True)
+    df_nicer_vis_srcflt = df_nicer_vis[df_nicer_vis['target_id'] == tragetid].reset_index(drop=True)
+    # Initiate a temporary visibility window empty dataframe
+    df_nicer_vis_srcflt_tmp = pd.DataFrame(columns=['vis_start', 'vis_end'], index=[0])
 
     # Loop over each orbit_day window
     for ii in od_windows.index:
         # Loop over each visibility window
         for jj in df_nicer_vis_srcflt.index:
-            # Change start and/or end time of visibility window to match od_windows
-            if ((df_nicer_vis_srcflt['vis_start'].loc[jj] < od_windows['start_time'].loc[ii]) and
-                    (df_nicer_vis_srcflt['vis_end'].loc[jj] <= od_windows['start_time'].loc[ii])):
+
+            # Change start and/or end time of temp visibility window to match od_windows
+            if df_nicer_vis_srcflt['vis_end'].loc[jj] <= od_windows['start_time'].loc[ii]:
                 # If the start and end_times of the visibility window are before start of orbit_day, simply skip
                 continue
 
             elif ((df_nicer_vis_srcflt['vis_start'].loc[jj] < od_windows['start_time'].loc[ii]) and
-                  (df_nicer_vis_srcflt['vis_end'].loc[jj] > od_windows['start_time'].loc[ii])):
+                  (df_nicer_vis_srcflt['vis_end'].loc[jj] > od_windows['start_time'].loc[ii]) and
+                  (df_nicer_vis_srcflt['vis_end'].loc[jj] < od_windows['end_time'].loc[ii])):
                 # If the start of the visibility window is before start of orbit_day, but ends within it
-                df_nicer_vis_srcflt.loc[jj, "vis_start"] = od_windows['start_time'].loc[ii]
+                df_nicer_vis_srcflt_tmp.loc[0, "vis_start"] = od_windows['start_time'].loc[ii]
+                df_nicer_vis_srcflt_tmp.loc[0, "vis_end"] = df_nicer_vis_srcflt.loc[jj, "vis_end"]
+
+            elif ((df_nicer_vis_srcflt['vis_start'].loc[jj] < od_windows['start_time'].loc[ii]) and
+                  (df_nicer_vis_srcflt['vis_end'].loc[jj] > od_windows['end_time'].loc[ii])):
+                # If the start of the visibility window is before start of orbit_day, but ends after it
+                df_nicer_vis_srcflt_tmp.loc[0, "vis_start"] = od_windows['start_time'].loc[ii]
+                df_nicer_vis_srcflt_tmp.loc[0, "vis_end"] = od_windows['end_time'].loc[ii]
 
             elif (((df_nicer_vis_srcflt['vis_start'].loc[jj] >= od_windows['start_time'].loc[ii]) and
                    (df_nicer_vis_srcflt['vis_start'].loc[jj] < od_windows['end_time'].loc[ii])) and
                   (df_nicer_vis_srcflt['vis_end'].loc[jj] > od_windows['end_time'].loc[ii])):
                 # If the start of the visibility window is within start and end of orbit_day, but ends after it
-                df_nicer_vis_srcflt.loc[jj, "vis_end"] = od_windows['end_time'].loc[ii]
+                df_nicer_vis_srcflt_tmp.loc[0, "vis_start"] = df_nicer_vis_srcflt.loc[jj, "vis_start"]
+                df_nicer_vis_srcflt_tmp.loc[0, "vis_end"] = od_windows['end_time'].loc[ii]
+
+            elif ((df_nicer_vis_srcflt['vis_start'].loc[jj] >= od_windows['start_time'].loc[ii]) and
+                  (df_nicer_vis_srcflt['vis_end'].loc[jj] <= od_windows['end_time'].loc[ii])):
+                # If the start and end of visibility window is within start and end of orbit_day
+                df_nicer_vis_srcflt_tmp.loc[0, "vis_start"] = df_nicer_vis_srcflt.loc[jj, "vis_start"]
+                df_nicer_vis_srcflt_tmp.loc[0, "vis_end"] = df_nicer_vis_srcflt.loc[jj, "vis_end"]
 
             elif df_nicer_vis_srcflt['vis_start'].loc[jj] >= od_windows['end_time'].loc[ii]:
                 # If the start of the visibility window is after the end of orbit_day, skip
@@ -323,27 +339,27 @@ def bright_earth_targetvis(issorbitdata, df_nicer_vis, od_windows, srcname, srcR
             # First let's retain the information of orbit_day visibility windows per traget
             # Append results in a dictionary
             target_od_startend_times_list.append({
+                'target_id': df_nicer_vis_srcflt['target_id'].loc[jj],  # keep original target id
                 'target_name': df_nicer_vis_srcflt['target_name'].loc[jj],  # keep original target name
-                'od_vis_start': df_nicer_vis_srcflt['vis_start'].loc[jj],
-                'od_vis_end': df_nicer_vis_srcflt['vis_end'].loc[jj]
+                'od_vis_start': df_nicer_vis_srcflt_tmp['vis_start'].loc[0],
+                'od_vis_end': df_nicer_vis_srcflt_tmp['vis_end'].loc[0]
             })
 
-            # Create DatetimeIndex of orbit_day visibility windows
-            duration_vis_window = (df_nicer_vis_srcflt['vis_end'].loc[jj] -
-                                   df_nicer_vis_srcflt['vis_start'].loc[jj]).total_seconds()
+            duration_vis_window = (df_nicer_vis_srcflt_tmp['vis_end'].loc[0] -
+                                   df_nicer_vis_srcflt_tmp['vis_start'].loc[0]).total_seconds()
             if duration_vis_window >= 240:
-                od_source_vis_windows = pd.date_range(start=df_nicer_vis_srcflt['vis_start'].loc[jj],
-                                                      end=df_nicer_vis_srcflt['vis_end'].loc[jj],
+                od_source_vis_windows = pd.date_range(start=df_nicer_vis_srcflt_tmp['vis_start'].loc[0],
+                                                      end=df_nicer_vis_srcflt_tmp['vis_end'].loc[0],
                                                       freq=str(freq_brearth) + 's')
             else:
-                od_source_vis_windows = pd.date_range(start=df_nicer_vis_srcflt['vis_start'].loc[jj],
-                                                      end=df_nicer_vis_srcflt['vis_end'].loc[jj],
+                od_source_vis_windows = pd.date_range(start=df_nicer_vis_srcflt_tmp['vis_start'].loc[0],
+                                                      end=df_nicer_vis_srcflt_tmp['vis_end'].loc[0],
                                                       freq=str(duration_vis_window) + 's')
 
             # Ensure the last timestamp matches 'end', otherwise append it
-            if od_source_vis_windows[-1] != df_nicer_vis_srcflt['vis_end'].loc[jj]:
+            if od_source_vis_windows[-1] != df_nicer_vis_srcflt_tmp['vis_end'].loc[0]:
                 od_source_vis_windows = od_source_vis_windows.append(
-                    pd.Index([df_nicer_vis_srcflt['vis_end'].loc[jj]]))
+                    pd.Index([df_nicer_vis_srcflt_tmp['vis_end'].loc[0]]))
 
             # Convert to series
             od_source_vis_windows = od_source_vis_windows.to_series().reset_index(drop=True)
@@ -375,7 +391,7 @@ def bright_earth_targetvis(issorbitdata, df_nicer_vis, od_windows, srcname, srcR
 
     # Put all information in a coherent dataframe
     targetbright_earth_df = pd.DataFrame({
-        'srcname': [srcname] * len(be_angle_list),  # Assign same source name to all rows
+        'target_id': [tragetid] * len(be_angle_list),  # Assign same source id to all rows
         'target_od_time': od_source_all_vis_windows,  # Store timestamps
         'brightearth': be_angle_list  # Store corresponding scalar values
     })
@@ -418,7 +434,7 @@ def visibilityplot_plotly(nicer_vis, target_brightearth, alltargets_od_startend_
     label_to_name = {}
     for _, row in nicer_vis.iterrows():
         label = f"({row['target_id']}, {row['target_name']}, {row['sunangle_start']:.2f}, {row['sunangle_trend']})"
-        label_to_name[label] = row['target_name']
+        label_to_name[label] = row['target_id']
 
     # -----------------------------
     # Build Plotly Figure
@@ -472,14 +488,14 @@ def visibilityplot_plotly(nicer_vis, target_brightearth, alltargets_od_startend_
     # 4) Brightearth intervals
     # We'll do a simple approach: interpret each consecutive pair as an interval
     # with color mapped to the brightearth of row i.
-    targets_be_angle = target_brightearth.drop_duplicates(subset=['srcname', 'target_od_time'], keep='first')
+    targets_be_angle = target_brightearth.drop_duplicates(subset=['target_id', 'target_od_time'], keep='first')
     # Group by srcname, then plot intervals from row i to row i+1 while respecting source orbit-day visibilities
-    for src, group in targets_be_angle.groupby('srcname'):
+    for src, group in targets_be_angle.groupby('target_id'):
         group = group.sort_values('target_od_time').reset_index(drop=True)
 
         # Filter per target od start-end visibility windows
-        target_od_startend_times = alltargets_od_startend_times[alltargets_od_startend_times['target_name'] ==
-                                                                group['srcname'].head(1).values[0]]
+        target_od_startend_times = alltargets_od_startend_times[alltargets_od_startend_times['target_id'] ==
+                                                                group['target_id'].head(1).values[0]]
         target_od_startend_times = target_od_startend_times.reset_index(drop=True)
 
         for od_ind in target_od_startend_times.index:
@@ -515,9 +531,9 @@ def visibilityplot_plotly(nicer_vis, target_brightearth, alltargets_od_startend_
                 color_hex = mcolors.to_hex(rgba)
 
                 # Y-value: match the timeline's y
-                # We'll assume row['srcname'] => 'Target A' => find the label (and it should)
+                # We'll assume row['target_id'] => 'Target A' => find the label (and it should)
                 y_val_candidates = [lab for lab in label_mapping if label_to_name[lab] ==
-                                    group_target_od.loc[i, 'srcname']]
+                                    group_target_od.loc[i, 'target_id']]
 
                 if not y_val_candidates:
                     continue
