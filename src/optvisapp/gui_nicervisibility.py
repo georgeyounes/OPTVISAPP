@@ -98,9 +98,9 @@ def create_app(context):
                                  id='target-selector',
                                  options=[
                                      {'label': f"{row['target_id']}, {row['target_name']}", 'value': row['target_id']}
-                                     for idx, row in context["df_nicer_vis_timeflt"].iterrows()],
-                                 #value=[row['target_id'] for idx, row in context["df_nicer_vis_timeflt"].iterrows()],
-                                 #value=context["plan_doc_targid"]["target_id"].astype(int).tolist(),
+                                     for idx, row in context["df_nicer_vis_timeflt"]
+                                     .drop_duplicates(subset=["target_id"])[["target_id", "target_name"]].iterrows()
+                                 ],
                                  value=unique_targets,
                                  labelStyle={'display': 'block'},
                                  style={
