@@ -119,14 +119,19 @@ def download_ntarget_visibilities(listofcoordinates, download_dir):
     # Reading list of coordinates
     targetsvisfiles_df = pd.read_csv(listofcoordinates, header=None, names=['Source', 'RAJ_DEG', 'DECJ_DEG'])
     listoffilepaths = []
-    for _, row in targetsvisfiles_df.iterrows():
+    target_id = []
+    for index, row in targetsvisfiles_df.iterrows():
         filpath = download_onetarget_visibility(row['RAJ_DEG'], row['DECJ_DEG'], download_dir)
         listoffilepaths.append(filpath)
+        target_id.append(int('99999'+str(index)))
 
-    # Create an NLLD compatible target catalog
+    targetsvisfiles_df['ID'] = target_id
+    targetsvisfiles_df.insert(0, 'ID', targetsvisfiles_df.pop('ID'))  # moving column to front of dataframe
+
+    # Create an NICER compatible target catalog
     usertargetfilename = 'nicer_userdefined_targetlist.csv'
     buffer = StringIO()
-    targetsvisfiles_df.to_csv(buffer, index=True, index_label='ID', header=True)
+    targetsvisfiles_df.to_csv(buffer, index=False, header=True)
     buffer.seek(0)
     csv_content = buffer.read()
 
@@ -142,13 +147,15 @@ def download_ntarget_visibilities(listofcoordinates, download_dir):
     return targetsvisfiles_df
 
 
-def read_agsfile_enhancedvisibilitytool(ags3_vis_file, target_name):
+def read_agsfile_enhancedvisibilitytool(ags3_vis_file, target_name, target_id):
     """
     Read-in AGS NICER visibility file created from the enhanced visibility tool as a dataframe
     :param ags3_vis_file: NICER visibility file
     :type ags3_vis_file: str
-    :param target_name: Target name used to create the online enhanced visibility windows (spaces will be removed)
+    :param target_name: Target name used to create the online enhanced visibility windows
     :type target_name: str
+    :param target_id: Target id which will be appended to the online enhanced visibility windows
+    :type target_id: int
     :return df_nicer_vis: NICER visibility
     :rtype: pandas.DataFrame
     :return df_nicer_vis_nosrcdulpicate: NICER visibility excluding all duplicate sources
@@ -178,6 +185,8 @@ def read_agsfile_enhancedvisibilitytool(ags3_vis_file, target_name):
     df_nicer_vis['target_name'] = df_nicer_vis['target_name'].str.strip()
     df_nicer_vis['target_name'] = target_name
 
+    df_nicer_vis['target_id'] = target_id
+
     # Drop duplicates of exact target_name and start or end of visibility windows, keep first
     # warning: these targets have different target_IDs, only first ID kept
     mask = (df_nicer_vis.duplicated(subset=['target_name', 'vis_start']) |
@@ -199,7 +208,8 @@ def readmerge_agsfiles_enhancedvisibilitytool(targetsvisdetails_df):
     df_nicer_vis_nosrcdulpicate_list = []
     for index, row in targetsvisdetails_df.iterrows():
         df_nicer_vis, df_nicer_vis_nosrcdulpicate = read_agsfile_enhancedvisibilitytool(
-            targetsvisdetails_df.loc[index, 'filepaths'], targetsvisdetails_df.loc[index, 'Source'])
+            targetsvisdetails_df.loc[index, 'filepaths'], targetsvisdetails_df.loc[index, 'Source'],
+            targetsvisdetails_df.loc[index, 'ID'])
         df_nicer_vis_all_list.append(df_nicer_vis)
         df_nicer_vis_nosrcdulpicate_list.append(df_nicer_vis_nosrcdulpicate)
 

@@ -84,6 +84,13 @@ def visibilitytargetcat(catalog_name, ags3, start_time, end_time, freq_bound=60,
     # filter nicer visibility accoding to times
     df_nicer_vis_timeflt = filtertime_nicervis(start_timeofint, end_timeofint, df_nicer_vis_nosrcdulpicate)
 
+    # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    # Make an exception if no visibility exists at all after time filtering
+    # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    if df_nicer_vis_timeflt.empty:
+        logger.error('No targets that satisfy the time selection criteria - Exiting')
+        raise Exception('No targets that satisfy the time selection criteria - Exiting')
+
     # Define time stamps for orbit
     orbit_range = orbittimes(start_timeofint, end_timeofint, freq_bound)
 
@@ -154,8 +161,13 @@ def visibilitytargetcat(catalog_name, ags3, start_time, end_time, freq_bound=60,
     # Filter out the targets that landed outside the user-defined sun angle range
     df_nicer_vis_timeflt = df_nicer_vis_timeflt[~df_nicer_vis_timeflt['target_id'].isin(target_outside_sunangle)]
 
+    if df_nicer_vis_timeflt.empty:
+        logger.error('No targets that satisfy the time and sun angle criteria - Exiting')
+        raise Exception('No targets that satisfy the time and sun angle criteria - Exiting')
+
     # Convert the sun angle results list into a DataFrame and append to df_nicer_vis_flt dataframe
     targetsun_angle_results_df = pd.DataFrame(target_sunangle_all_list)
+
     df_nicer_vis_timeflt = df_nicer_vis_timeflt.merge(targetsun_angle_results_df, on='target_id', how='left')
 
     # Convert the bright_earth angle results list into a DataFrame
@@ -578,7 +590,7 @@ def visibilityplot_plotly(nicer_vis, target_brightearth, alltargets_od_startend_
 def main():
     parser = argparse.ArgumentParser(
         description="Provide orbit status and Sun angle information to NICER target catalog")
-    parser.add_argument("catalog_name", help="A NICER source catalog name ISS", type=str)
+    parser.add_argument("catalog_name", help="A NICER target catalog", type=str)
     parser.add_argument("ags3", help="A NICER AGS3 visibility file", type=str)
     parser.add_argument("start_time", help="Start of visibilities (Y-jTH:M:S, e.g., "
                                            "2025-075T00:00:00)", type=str)
