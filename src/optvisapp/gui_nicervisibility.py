@@ -238,7 +238,7 @@ def main():
     args = parser.parse_args()
 
     if args.downloadparquet:
-        folderid = "17hDfD34ljxtsz9JvBNXbSXY1ZyANtgWn?usp=sharing"
+        folderid = "1PONvoKdqgkOmXdQQYag5k4EsHC_YyLS6?usp=sharing"
         gdown.download_folder(id=folderid)
         os.system('mv ./visibilities_files/*.parquet ./visibilities_files/*.docx .')
         os.system('rm -rf visibilities_files')
