@@ -60,6 +60,17 @@ def visibilitytargetcat(catalog_name, ags3, start_time, end_time, freq_bound=60,
     :type saveplot: bool
     """
 
+    logger.info('\n Running function visibilitytargetcat with input parameters: '
+                '\n Target catalog: ' + str(catalog_name) +
+                '\n AGS3 visibility file: ' + str(ags3) +
+                '\n Start time of interest: ' + str(start_time) +
+                '\n End time of interest: ' + str(end_time) +
+                '\n Sun angle lower-limit: ' + str(sa_ll) +
+                '\n Sun angle upper-limit: ' + str(sa_ul) +
+                '\n Output files prefix: ' + str(outputFile) +
+                '\n Save results to .parquet?: ' + str(saveresults) +
+                '\n Save static .html plot: ' + str(saveplot) + '\n')
+
     # Reading target catalog
     targetcat_df, targetcat_df_nosourceduplicates, _ = ags_iss.read_target_catalog(catalog_name)
 
@@ -84,9 +95,7 @@ def visibilitytargetcat(catalog_name, ags3, start_time, end_time, freq_bound=60,
     # filter nicer visibility accoding to times
     df_nicer_vis_timeflt = filtertime_nicervis(start_timeofint, end_timeofint, df_nicer_vis_nosrcdulpicate)
 
-    # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    # Make an exception if no visibility exists at all after time filtering
-    # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    # If no visibility exists at all after time filtering
     if df_nicer_vis_timeflt.empty:
         logger.error('No targets that satisfy the time selection criteria - Exiting')
         raise Exception('No targets that satisfy the time selection criteria - Exiting')

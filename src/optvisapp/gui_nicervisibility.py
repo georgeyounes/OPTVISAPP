@@ -63,7 +63,7 @@ def create_app(context):
                              clearable=False
                          ),
 
-                         dcc.Graph(id='visibility-plot'), # , style={'width': '70%', 'height': '70%'}
+                         dcc.Graph(id='visibility-plot'),  # , style={'width': '70%', 'height': '70%'}
 
                          html.A(
                              href='https://heasarc.gsfc.nasa.gov/docs/nicer/',
@@ -171,7 +171,7 @@ def create_app(context):
         df_filtered = df_filtered.sort_values(by=sort_field, ascending=False)
 
         # Get unique target_ids from the filtered data and sort them
-        #unique_targets_filtered = np.sort(df_filtered['target_id'].unique())
+        # unique_targets_filtered = np.sort(df_filtered['target_id'].unique())
         unique_targets_filtered = df_filtered['target_id'].unique()
 
         if page_size == 'max':
@@ -220,19 +220,17 @@ def create_app(context):
 
 def main():
     parser = argparse.ArgumentParser(description="NICER Target Visibilities App")
+    parser.add_argument("-st", "--start_time", required=True,
+                        help="Start time in format Y-jTH:M:S (e.g., 2025-075T00:00:00)", default=None)
+    parser.add_argument("-et", "--end_time", required=True,
+                        help="End time in format Y-jTH:M:S (e.g., 2025-075T00:00:00)", default=None)
     parser.add_argument("-vs", "--visibilities", help="Path to full target visibilities", default=None)
     parser.add_argument("-br", "--brightearth", help="Path to target bright-earth angle", default=None)
     parser.add_argument("-os", "--od_startend", help="Path to target start/end orbit-day visibilities",
                         default=None)
     parser.add_argument("-ob", "--odbounds", help="ISS orbit-day bounds", default=None)
-
     parser.add_argument("-pd", "--planningdoc", help="Elizabeth planning doc in .docx format",
                         default=None)
-
-    parser.add_argument("-st", "--start_time", help="Start time in format Y-jTH:M:S "
-                                                    "(e.g., 2025-075T00:00:00)", default=None)
-    parser.add_argument("-et", "--end_time", help="End time in format Y-jTH:M:S "
-                                                  "(e.g., 2025-075T00:00:00)", default=None)
     parser.add_argument("-dp", "--downloadparquet", help="Download parquet file",
                         default=False, type=bool, action=argparse.BooleanOptionalAction)
     args = parser.parse_args()
@@ -240,7 +238,7 @@ def main():
     if args.downloadparquet:
         folderid = "1PONvoKdqgkOmXdQQYag5k4EsHC_YyLS6?usp=sharing"
         gdown.download_folder(id=folderid)
-        os.system('mv ./visibilities_files/*.parquet ./visibilities_files/*.docx .')
+        os.system('mv ./visibilities_files/*.parquet ./visibilities_files/*.docx ./visibilities_files/*.log .')
         os.system('rm -rf visibilities_files')
         # making sure all parquet files are renamed to downloaded files
         args.visibilities = 'visibilities_vis.parquet'
@@ -276,18 +274,9 @@ def main():
                "target_brightearth_all_df": pd.read_parquet(args.brightearth),
                "target_od_startend_times_all": pd.read_parquet(args.od_startend),
                "od_startend_times_all": pd.read_parquet(args.odbounds),
-               "plan_doc_targid": df_planningdoc_tragetids}
-
-    # Deals with start and end times
-    if args.start_time is None:
-        context["start_time"] = context["df_nicer_vis_timeflt"]['vis_start'].min()
-    else:
-        context["start_time"] = pd.to_datetime(args.start_time, format='%Y-%jT%H:%M:%S', utc=True)
-
-    if args.end_time is None:
-        context["end_time"] = context["df_nicer_vis_timeflt"]['vis_end'].max()
-    else:
-        context["end_time"] = pd.to_datetime(args.end_time, format='%Y-%jT%H:%M:%S', utc=True)
+               "plan_doc_targid": df_planningdoc_tragetids,
+               "start_time": pd.to_datetime(args.start_time, format='%Y-%jT%H:%M:%S', utc=True),
+               "end_time": pd.to_datetime(args.end_time, format='%Y-%jT%H:%M:%S', utc=True)}
 
     context["sunangle_min"] = context["df_nicer_vis_timeflt"]['sunangle_start'].min()
     context["sunangle_max"] = context["df_nicer_vis_timeflt"]['sunangle_start'].max()
