@@ -572,7 +572,6 @@ def visibilityplot_plotly(nicer_vis, target_brightearth, alltargets_od_startend_
 
     # Set layout
     fig.update_layout(
-        title="Target Visibility Timeline",
         xaxis_title="Time",
         yaxis_title="Target (ID, Name, SA, SA trend)",
         xaxis=dict(type='date'),
