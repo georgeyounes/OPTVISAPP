@@ -581,7 +581,6 @@ def visibilityplot_plotly(nicer_vis, target_brightearth, alltargets_od_startend_
             ticktext=list(label_mapping.keys()),
             range=[-0.02, 1.02]  # a bit of padding
         ),
-        width=1300, height=1000,
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)'
     )
@@ -589,6 +588,8 @@ def visibilityplot_plotly(nicer_vis, target_brightearth, alltargets_od_startend_
     # Rotate x-ticks
     fig.update_xaxes(tickangle=45, range=[start_time - pd.Timedelta(seconds=freq_bound / 2),
                                           end_time + pd.Timedelta(seconds=freq_bound / 2)])
+
+    fig.layout.autosize = True
 
     if isinstance(outputFile, str):
         fig.write_html(f'./{outputFile}.html')

@@ -63,7 +63,10 @@ def create_app(context):
                              clearable=False
                          ),
 
-                         dcc.Graph(id='visibility-plot'),  # , style={'width': '70%', 'height': '70%'}
+                         dcc.Graph(id='visibility-plot',
+                                   config={'responsive': True},
+                                   style={'width': '100%', 'height': '100%'}
+                                   ),  # , style={'width': '70%', 'height': '70%'}
 
                          html.A(
                              href='https://heasarc.gsfc.nasa.gov/docs/nicer/',
@@ -73,8 +76,10 @@ def create_app(context):
                                  style={
                                      'position': 'absolute',
                                      'top': '2%',
-                                     'right': '0.8%',
-                                     'height': '32%',
+                                     'right': '5%',
+                                     'maxWidth': '20%',  # Let the image occupy at most 20% of the viewport width
+                                     'width': 'auto',  # width adjusts automatically
+                                     'height': 'auto',
                                      'zIndex': '1000'
                                  }
                              )
@@ -87,7 +92,7 @@ def create_app(context):
                          ], style={'display': 'flex', 'alignItems': 'center'}),
 
                          dcc.Store(id='current-page', data=1)
-                     ], style={'width': '72%', 'paddingRight': '20px'}),
+                     ], style={'width': '74%', 'height': '100vh', 'paddingRight': '2%'}),
 
                      html.Div(
                          children=[
@@ -108,12 +113,12 @@ def create_app(context):
                                      'height': '80vh',
                                      'width': '20vw',
                                      'border': '1px solid #ccc',
-                                     'padding': '10px'
+                                     'padding': '0.8%'
                                  }
                              )
                          ],
-                         style={'width': '25%', 'height': '100vh', 'overflowY': 'auto', 'paddingTop': '21%',
-                                'marginLeft': '5%'}
+                         style={'width': '24%', 'height': '100vh', 'overflowY': 'auto', 'paddingTop': '21%',
+                                'marginLeft': '2%', 'paddingRight': '0.5%'}
                      )
                  ])
     ])
