@@ -221,9 +221,9 @@ def create_app(context):
 def main():
     parser = argparse.ArgumentParser(description="NICER Target Visibilities App")
     parser.add_argument("-st", "--start_time", required=True,
-                        help="Start time in format Y-jTH:M:S (e.g., 2025-075T00:00:00)", default=None)
+                        help="Start time in format Y-jTH:M:S (e.g., 2025-075T00:00:00)")
     parser.add_argument("-et", "--end_time", required=True,
-                        help="End time in format Y-jTH:M:S (e.g., 2025-075T00:00:00)", default=None)
+                        help="End time in format Y-jTH:M:S (e.g., 2025-075T00:00:00)")
     parser.add_argument("-vs", "--visibilities", help="Path to full target visibilities", default=None)
     parser.add_argument("-br", "--brightearth", help="Path to target bright-earth angle", default=None)
     parser.add_argument("-os", "--od_startend", help="Path to target start/end orbit-day visibilities",
