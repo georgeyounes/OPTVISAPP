@@ -250,16 +250,10 @@ def bright_earth_angle(iss_cartesian, time, src_ra, src_dec):
     gcrs_coords = GCRS(cart_repr, obstime=time)
     itrs_coords = gcrs_coords.transform_to(coord.ITRS(obstime=time))
 
-    # EarthLocation.from_geocentric supports vectorized inputs.
-    earth_locs = EarthLocation.from_geocentric(
-        itrs_coords.cartesian.x,
-        itrs_coords.cartesian.y,
-        itrs_coords.cartesian.z
-    )
-
     # Although get_sun(time) is a single coordinate, AltAz transformation
     # may not directly support a vectorized EarthLocation. For 180 points this
-    # loop is acceptable:
+    # loop is acceptable - it is parallelized and runs on your available
+    # number_of_cores - 1
     sun_coord = get_sun(time)
     # Parallelize the loop over horizon points:
     hring_lit = np.array(
@@ -287,7 +281,7 @@ def bright_earth_angle(iss_cartesian, time, src_ra, src_dec):
 def sunangle(nicertimemjd, srcRA, srcDEC):
     """
     Calculates Sun angle for a source with RA and DEC in degrees J2000
-    :param nicertimemjd: numpy array of (nicer) times in MJD
+    :param nicertimemjd: numpy array of times in MJD
     :type nicertimemjd: numpy.ndarray
     :param srcRA: Right ascension in degrees J2000
     :type srcRA: float

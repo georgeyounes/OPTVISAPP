@@ -4,29 +4,28 @@ from astropy import units as u
 import pandas as pd
 import argparse
 
-def plot_targets(targets,show_xmm,show_er):
-    tab = pd.read_csv(targets,header=None)
-    fulltab = pd.read_csv("source_catalogs/4XMM_targets.csv")
+
+def plot_targets(targets, show_xmm, show_er):
+    tab = pd.read_csv(targets, header=None)
 
     fig = plt.figure()
     ax = fig.add_subplot(1, 1, 1, projection="mollweide")
     ras = tab[2].to_numpy()
-    ras[np.where(ras>180)] -= 360
-    plt.scatter(ras*u.deg.to('rad'),tab[3]*u.deg.to('rad'),marker='s',s=50,zorder=2)
+    ras[np.where(ras > 180)] -= 360
+    plt.scatter(ras * u.deg.to('rad'), tab[3] * u.deg.to('rad'), marker='s', s=50, zorder=2)
 
     if show_xmm:
         fulltab_xmm = pd.read_csv("source_catalogs/4XMM_targets.csv")
         ras_xmm = fulltab_xmm['ra'].to_numpy()
-        ras_xmm[np.where(ras_xmm>180)] -= 360
-        plt.scatter(ras_xmm*u.deg.to('rad'),fulltab_xmm['dec']*u.deg.to('rad'),
-                    marker='.',s=50,color='grey',zorder=1,alpha=0.2)
+        ras_xmm[np.where(ras_xmm > 180)] -= 360
+        plt.scatter(ras_xmm * u.deg.to('rad'), fulltab_xmm['dec'] * u.deg.to('rad'),
+                    marker='.', s=50, color='grey', zorder=1, alpha=0.2)
     if show_er:
         fulltab_er = pd.read_csv("source_catalogs/eROSITA_targets.csv")
         ras_er = fulltab_er['ra'].to_numpy()
-        ras_er[np.where(ras_er>180)] -= 360
-        plt.scatter(ras_er*u.deg.to('rad'),fulltab_er['dec']*u.deg.to('rad'),
-                    marker='.',s=50,color='green',zorder=1,alpha=0.02)
-
+        ras_er[np.where(ras_er > 180)] -= 360
+        plt.scatter(ras_er * u.deg.to('rad'), fulltab_er['dec'] * u.deg.to('rad'),
+                    marker='.', s=50, color='green', zorder=1, alpha=0.02)
 
     plt.grid()
     plt.show()
