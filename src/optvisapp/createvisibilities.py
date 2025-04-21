@@ -16,6 +16,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
+from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 
@@ -28,44 +29,17 @@ sys.dont_write_bytecode = True
 logger = get_logger(__name__)
 
 
-def download_onetarget_visibility(ra, dec, download_dir):
-    """
-    Download to 'download_dir' the NICER enhanced visibilities given RA and DEC
-    :param ra: right ascension in degrees J2000
-    :type ra: str
-    :param dec: declination in degrees J2000
-    :type dec: str
-    :param download_dir: Download directory
-    :type download_dir: str
-    :return new_path: full path to downloaded file
-    :rtype: str
-    """
-    # Ensure download path exists
-    download_dir = os.path.abspath(download_dir)
+def download_onetarget_visibility(driver, wait, ra, dec, download_dir):
+    """Assumes driver and wait are already created; does one download cycle."""
+    # ensure download dir
     os.makedirs(download_dir, exist_ok=True)
 
-    # Set Chrome options
-    chrome_options = Options()
-    prefs = {
-        "download.default_directory": download_dir,
-        "download.prompt_for_download": False,
-        "download.directory_upgrade": True,
-        "safebrowsing.enabled": True
-    }
-    chrome_options.add_experimental_option("prefs", prefs)
-    chrome_options.add_argument("--headless")  # Optional headless mode
-
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
-    wait = WebDriverWait(driver, 20)
-
-    # Step 1: Go to NICER visibility page
+    # 1) Load form page and fill it out
     driver.get("https://heasarc.gsfc.nasa.gov/wsgi-scripts/nicer/visibility/nicervis.wsgi/")
     wait.until(EC.presence_of_element_located((By.NAME, "ra")))
 
-    # Step 2: Fill form
     driver.find_element(By.NAME, "ra").clear()
     driver.find_element(By.NAME, "ra").send_keys(str(ra))
-
     driver.find_element(By.NAME, "dec").clear()
     driver.find_element(By.NAME, "dec").send_keys(str(dec))
 
@@ -77,53 +51,67 @@ def download_onetarget_visibility(ra, dec, download_dir):
         (By.XPATH, "//input[@type='radio' and @name='daynightsel' and @value='--day-only']")))
     day_radio.click()
 
-    submit_button = wait.until(EC.element_to_be_clickable(
-        (By.XPATH, "//input[@type='submit' and @value='Submit']")))
-    submit_button.click()
+    driver.find_element(By.XPATH,
+                        "//input[@type='submit' and @value='Submit']").click()
 
-    # Step 3: Wait for results or error
-    wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
-    if "Internal Server Error" in driver.page_source:
-        logger.info(f"Server error for RA={ra}, Dec={dec}")
-        return None
-
-    # Step 4: Download visibility file
-    download_button = wait.until(EC.element_to_be_clickable(
+    # 2) Wait for the “Download Visibilities” button, click it, and wait for the CSV
+    wait.until(EC.element_to_be_clickable(
         (By.XPATH, "//input[@type='submit' and @value='Download Visibilities']")))
-    download_button.click()
-    # Wait for the file to appear or start downloading
-    wait.until(lambda d: any(f.endswith('.crdownload') or f.endswith('.csv') for f in os.listdir(download_dir)))
+    driver.find_element(By.XPATH,
+                        "//input[@type='submit' and @value='Download Visibilities']").click()
 
-    downloaded_file = wait_for_download_to_finish(download_dir)
-
-    if downloaded_file:
-        new_path = downloaded_file
-        logger.info("Download complete.")
-        driver.quit()
-        return new_path
-    else:
-        logger.error("Download timed out.")
-        raise Exception(f"Download timed out.")
+    # simple wait: “.crdownload” appears, then your own wait_for_download_to_finish()
+    wait.until(lambda d: any(f.endswith('.crdownload') or f.endswith('.csv')
+                             for f in os.listdir(download_dir)))
+    return wait_for_download_to_finish(download_dir)
 
 
 def download_ntarget_visibilities(listofcoordinates, download_dir):
-    """
-    Download to 'download_dir' the NICER enhanced visibilities given a .txt file of RA, DEC, target_name
-    :param listofcoordinates: a text file (comma-separated) with coordinates and target names (Source, RA, DEC)
-    :type listofcoordinates: str
-    :param download_dir: Directory to which downloaded visibilities are saved
-    :type download_dir: str
-    :return targetvisdetail_df: dataframe of (Source, 'RAJ_DEG', 'DECJ_DEG', filepaths)
-    :rtype: pandas.DataFrame
-    """
+
     # Reading list of coordinates
     targetsvisfiles_df = pd.read_csv(listofcoordinates, header=None, names=['Source', 'RAJ_DEG', 'DECJ_DEG'])
     listoffilepaths = []
     target_id = []
-    for index, row in targetsvisfiles_df.iterrows():
-        filpath = download_onetarget_visibility(row['RAJ_DEG'], row['DECJ_DEG'], download_dir)
-        listoffilepaths.append(filpath)
-        target_id.append(int('99999'+str(index)))
+
+    # Initiating a driver
+    chrome_options = Options()
+    prefs = {
+        "download.default_directory": os.path.abspath(download_dir),
+        "download.prompt_for_download": False,
+        "download.directory_upgrade": True,
+        "safebrowsing.enabled": True
+    }
+    chrome_options.add_experimental_option("prefs", prefs)
+    chrome_options.add_argument("--headless")
+
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()),
+                              options=chrome_options)
+    wait = WebDriverWait(driver, 30)
+
+    try:
+        for index, row in targetsvisfiles_df.iterrows():
+            try:
+                # attempt the download
+                path = download_onetarget_visibility(
+                    driver, wait,
+                    row['RAJ_DEG'], row['DECJ_DEG'],
+                    download_dir
+                )
+                logger.info(f"✅ Download succeeded for {row['Source']} → {path}")
+            except (TimeoutException, TimeoutError) as e:
+                # skip this target if we timed out waiting for .csv
+                logger.warning(f"⚠️ Skipping {row['Source']} (RA={row['RAJ_DEG']}, DEC={row['DECJ_DEG']}): {e}")
+                path = None
+            except Exception as e:
+                # catch any other error so one bad run doesn't kill everything
+                logger.error(f"❌ Unexpected error for {row['Source']}: {e}", exc_info=True)
+                path = None
+
+            listoffilepaths.append(path)
+            # still generate an ID for consistency
+            target_id.append(int(f"99999{index}"))
+    finally:
+        driver.quit()
 
     targetsvisfiles_df['ID'] = target_id
     targetsvisfiles_df.insert(0, 'ID', targetsvisfiles_df.pop('ID'))  # moving column to front of dataframe
@@ -207,11 +195,15 @@ def readmerge_agsfiles_enhancedvisibilitytool(targetsvisdetails_df):
     df_nicer_vis_all_list = []
     df_nicer_vis_nosrcdulpicate_list = []
     for index, row in targetsvisdetails_df.iterrows():
-        df_nicer_vis, df_nicer_vis_nosrcdulpicate = read_agsfile_enhancedvisibilitytool(
-            targetsvisdetails_df.loc[index, 'filepaths'], targetsvisdetails_df.loc[index, 'Source'],
-            targetsvisdetails_df.loc[index, 'ID'])
-        df_nicer_vis_all_list.append(df_nicer_vis)
-        df_nicer_vis_nosrcdulpicate_list.append(df_nicer_vis_nosrcdulpicate)
+        # Skip visibilites where download failed
+        if targetsvisdetails_df.loc[index, 'filepaths'] is None:
+            continue
+        else:
+            df_nicer_vis, df_nicer_vis_nosrcdulpicate = read_agsfile_enhancedvisibilitytool(
+                targetsvisdetails_df.loc[index, 'filepaths'], targetsvisdetails_df.loc[index, 'Source'],
+                targetsvisdetails_df.loc[index, 'ID'])
+            df_nicer_vis_all_list.append(df_nicer_vis)
+            df_nicer_vis_nosrcdulpicate_list.append(df_nicer_vis_nosrcdulpicate)
 
     df_nicer_vis_all = pd.concat(df_nicer_vis_all_list)
     df_nicer_vis_nosrcdulpicate = pd.concat(df_nicer_vis_nosrcdulpicate_list)
@@ -245,23 +237,47 @@ def writedfagsvisibtocvs(df_nicer_vis, nameofcvsfile):
     return None
 
 
-def wait_for_download_to_finish(path, timeout=30):
+def wait_for_download_to_finish(download_dir, timeout=30):
+    """
+    Blocks until:
+      - at least one .csv is present in download_dir
+      - no .crdownload files remain
+    Returns the newest .csv by creation time.
+    Raises TimeoutError if download_dir never settles within `timeout` seconds.
+    """
     start_time = time.time()
     end_time = start_time + timeout
+
     while time.time() < end_time:
-        files = [os.path.join(path, f) for f in os.listdir(path)]
-        files = [f for f in files if os.path.getmtime(f) >= start_time]
+        good_files = []
+        # 1) scan the folder
+        for name in os.listdir(download_dir):
+            if name.startswith('.'):  # skip hidden
+                continue
+            full = os.path.join(download_dir, name)
+            try:
+                # only consider files touched after we started waiting
+                if os.path.getmtime(full) < start_time:
+                    continue
+            except FileNotFoundError:
+                # race: file vanished between listdir and stat
+                continue
+            good_files.append(full)
 
-        # Exclude hidden/system files
-        files = [f for f in files if not os.path.basename(f).startswith(".")]
+        # 2) split into in‑flight vs completed
+        crdownloads = [f for f in good_files if f.endswith('.crdownload')]
+        completed = [f for f in good_files if f.endswith('.csv')]
 
-        crdownloads = [f for f in files if f.endswith('.crdownload')]
-        completed = [f for f in files if not f.endswith('.crdownload')]
-
-        if not crdownloads and completed:
+        # 3) if we have at least one .csv and ZERO .crdownload, we're done
+        if completed and not crdownloads:
+            # return the newest (by creation time)
             return max(completed, key=os.path.getctime)
-        time.sleep(1)
-    return None
+
+        # 4) otherwise, wait a bit and retry
+        time.sleep(0.5)
+
+    # timed out
+    raise TimeoutError(f"No completed download after {timeout}s in {download_dir!r}")
 
 
 def main():
